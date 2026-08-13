@@ -7,6 +7,10 @@ import { config, createLogger } from '@analytics/shared';
 const logger = createLogger('dashboard-config');
 
 async function bootstrap() {
+  // PrismaClient reads the datasource from process.env.DATABASE_URL at
+  // construction time — point the dashboard-config service at its own schema.
+  process.env.DATABASE_URL = config.postgres.dashboardsUrl;
+
   const app = await NestFactory.create(AppModule, { logger: false });
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
   app.enableCors({ origin: true });

@@ -1,0 +1,177 @@
+version: "3.9"
+
+# ---------------------------------------------------------------------------
+# Self-hosted analytics platform — local infrastructure + optional services.
+#
+#   docker compose up -d redis postgres clickhouse
+#   npm run db:init
+#   npm run dev:all
+#
+# The analytics services can also run on the host (npm run dev:*) and talk to
+# these containers via the published ports below.
+# ---------------------------------------------------------------------------
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: analytics-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: analytics-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: analytics
+      POSTGRES_PASSWORD: analytics
+      POSTGRES_DB: analytics_auth
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analytics"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8-alpine
+    container_name: analytics-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_DB: analytics
+    ports:
+      - "8123:8123" # HTTP (client)
+      - "9000:9000" # native TCP
+      - "9009:9009" # interserver
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+
+  # Optional: run the full service mesh in containers instead of on the host.
+  # Requires building images first: docker compose build
+  auth:
+    build: { context: ., dockerfile: docker/Dockerfile.service, args: { SERVICE: auth } }
+    container_name: analytics-auth
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://analytics:analytics@postgres:5432/analytics_auth
+      REDIS_HOST: redis
+      CLICKHOUSE_URL: http://clickhouse:8123
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      SERVICE_NAME: auth
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "4001:4001"
+      - "5001:5001"
+
+  ingestion:
+    build: { context: ., dockerfile: docker/Dockerfile.service, args: { SERVICE: ingestion } }
+    container_name: analytics-ingestion
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+      AUTH_GRPC_URL: auth:5001
+      SERVICE_NAME: ingestion
+    depends_on:
+      - redis
+      - auth
+    ports:
+      - "4002:4002"
+
+  stream-processor:
+    build: { context: ., dockerfile: docker/Dockerfile.service, args: { SERVICE: stream-processor } }
+    container_name: analytics-stream-processor
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+      CLICKHOUSE_URL: http://clickhouse:8123
+      SERVICE_NAME: stream-processor
+    depends_on:
+      - redis
+      - clickhouse
+    ports:
+      - "4003:4003"
+
+  query-api:
+    build: { context: ., dockerfile: docker/Dockerfile.service, args: { SERVICE: query-api } }
+    container_name: analytics-query-api
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+      CLICKHOUSE_URL: http://clickhouse:8123
+      AUTH_GRPC_URL: auth:5001
+      SERVICE_NAME: query-api
+    depends_on:
+      - clickhouse
+      - redis
+      - auth
+    ports:
+      - "4004:4004"
+      - "5004:5004"
+
+  alerting:
+    build: { context: ., dockerfile: docker/Dockerfile.service, args: { SERVICE: alerting } }
+    container_name: analytics-alerting
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+      QUERY_GRPC_URL: query-api:5004
+      SERVICE_NAME: alerting
+    depends_on:
+      - redis
+      - query-api
+    ports:
+      - "4005:4005"
+
+  dashboard-config:
+    build: { context: ., dockerfile: docker/Dockerfile.service, args: { SERVICE: dashboard-config } }
+    container_name: analytics-dashboard-config
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://analytics:analytics@postgres:5432/analytics_dashboards
+      SERVICE_NAME: dashboard-config
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4006:4006"
+
+  web:
+    build: { context: ., dockerfile: docker/Dockerfile.web }
+    container_name: analytics-web
+    restart: unless-stopped
+    depends_on:
+      - auth
+      - ingestion
+      - query-api
+      - alerting
+      - dashboard-config
+    ports:
+      - "5173:80"
+
+volumes:
+  redis-data:
+  postgres-data:
+  clickhouse-data:

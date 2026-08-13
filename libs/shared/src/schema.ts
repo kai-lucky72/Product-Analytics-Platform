@@ -26,7 +26,7 @@ export const CLICKHOUSE_DDL: string[] = [
    ) ENGINE = ReplacingMergeTree
    PARTITION BY toYYYYMM(timestamp)
    ORDER BY (project_id, event_name, timestamp, event_id)
-   TTL timestamp + INTERVAL 12 MONTH
+   TTL toDateTime(timestamp) + INTERVAL 12 MONTH
    SETTINGS index_granularity = 8192`,
 
   // Real-time aggregation table. AggregatingMergeTree stores per-hour distinct
@@ -68,7 +68,7 @@ export const CLICKHOUSE_DDL: string[] = [
    ) ENGINE = MergeTree
    PARTITION BY toYYYYMM(started_at)
    ORDER BY (project_id, started_at)
-   TTL started_at + INTERVAL 12 MONTH`,
+   TTL toDateTime(started_at) + INTERVAL 12 MONTH`,
 
   // Event-name dictionary for typeahead / filter UIs.
   `CREATE TABLE IF NOT EXISTS analytics.event_names (

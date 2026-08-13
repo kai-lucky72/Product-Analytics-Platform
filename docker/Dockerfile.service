@@ -1,0 +1,29 @@
+# Multi-stage image for any single backend service in the monorepo.
+# Build: docker build -f docker/Dockerfile.service --build-arg SERVICE=auth .
+FROM node:22-alpine AS base
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY tsconfig.base.json ./
+COPY libs ./libs
+COPY proto ./proto
+COPY services ./services
+
+# Build the shared lib (TypeScript sources are consumed directly by ts-node,
+# so we only need dev deps installed; production run uses ts-node too).
+RUN npm install --no-audit --no-fund
+
+FROM base AS runtime
+ARG SERVICE=auth
+ENV SERVICE_NAME=${SERVICE} \
+    NODE_ENV=production
+WORKDIR /app
+
+# Generate Prisma clients for the OLTP services at image build time.
+RUN if [ -d services/auth/prisma ]; then npx prisma generate --schema services/auth/prisma/schema.prisma; fi
+RUN if [ -d services/dashboard-config/prisma ]; then npx prisma generate --schema services/dashboard-config/prisma/schema.prisma; fi
+
+EXPOSE 4001 4002 4003 4004 4005 4006 5001 5004
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+CMD ["entrypoint.sh"]

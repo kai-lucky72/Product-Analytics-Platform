@@ -2,13 +2,11 @@ node_modules/
 dist/
 build/
 *.log
-.env
-.env.local
 coverage/
 .DS_Store
 /data
 /tmp
 .idea/
-.vscode/
 *.tsbuildinfo
 **/prisma/generated/
+config.bat

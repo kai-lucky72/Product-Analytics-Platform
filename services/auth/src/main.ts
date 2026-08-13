@@ -8,6 +8,10 @@ import { analyticsProtoPath, config, createLogger } from '@analytics/shared';
 const logger = createLogger('auth');
 
 async function bootstrap() {
+  // PrismaClient reads the datasource from process.env.DATABASE_URL at
+  // construction time — apply the shared default before Nest wires providers.
+  process.env.DATABASE_URL = config.postgres.url;
+
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn'],
   });

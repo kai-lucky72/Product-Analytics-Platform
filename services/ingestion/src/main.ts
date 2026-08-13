@@ -14,6 +14,11 @@ async function bootstrap() {
   );
   app.enableCors({ origin: true, methods: ['GET', 'POST', 'OPTIONS'] });
 
+  // Batch capture payloads can be large (up to BATCH_MAX_BYTES per request);
+  // raise the default 100kb body limit so bursts aren't rejected up front.
+  const maxBytes = config.batch.maxBytes;
+  app.useBodyParser('json', { limit: maxBytes });
+
   await app.listen(config.ports.ingestion, '0.0.0.0');
   logger.info('ingestion service listening', { port: config.ports.ingestion });
 }

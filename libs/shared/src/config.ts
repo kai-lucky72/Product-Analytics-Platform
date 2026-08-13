@@ -35,6 +35,10 @@ export const config = {
       'DATABASE_URL',
       'postgresql://analytics:analytics@127.0.0.1:5432/analytics_auth',
     ),
+    dashboardsUrl: str(
+      'DATABASE_URL_DASHBOARDS',
+      'postgresql://analytics:analytics@127.0.0.1:5432/analytics_dashboards',
+    ),
   },
 
   ports: {
