@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Dashboard {
+  id          String    @id @default(cuid())
+  projectId   String
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  panels      Panel[]
+
+  @@index([projectId])
+}
+
+model Panel {
+  id          String    @id @default(cuid())
+  dashboardId String
+  type        String // overview | metric | funnel | retention | events
+  title       String
+  config      String // JSON blob with panel-specific query params
+  position    Int       @default(0)
+  width       Int       @default(12)
+  height      Int       @default(6)
+  createdAt   DateTime  @default(now())
+  dashboard   Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([dashboardId])
+}

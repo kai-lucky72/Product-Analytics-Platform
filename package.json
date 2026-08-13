@@ -1,0 +1,32 @@
+{
+  "name": "selfhosted-analytics",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Privacy-first, self-hosted product analytics platform (NestJS monorepo)",
+  "workspaces": [
+    "libs/*",
+    "services/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:auth": "npm run dev -w @analytics/auth",
+    "dev:ingestion": "npm run dev -w @analytics/ingestion",
+    "dev:stream": "npm run dev -w @analytics/stream-processor",
+    "dev:query": "npm run dev -w @analytics/query-api",
+    "dev:alerting": "npm run dev -w @analytics/alerting",
+    "dev:dashboards": "npm run dev -w @analytics/dashboard-config",
+    "dev:all": "concurrently -n auth,ingest,stream,query,alert,dash -c blue,green,yellow,magenta,cyan,white \"npm run dev -w @analytics/auth\" \"npm run dev -w @analytics/ingestion\" \"npm run dev -w @analytics/stream-processor\" \"npm run dev -w @analytics/query-api\" \"npm run dev -w @analytics/alerting\" \"npm run dev -w @analytics/dashboard-config\"",
+    "db:init": "tsx scripts/init-db.ts",
+    "db:seed": "tsx scripts/seed.ts",
+    "infra:check": "tsx scripts/infra-check.ts"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,144 @@
+syntax = "proto3";
+
+package analytics;
+
+// ---------------------------------------------------------------------------
+// Internal gRPC contracts for the self-hosted analytics platform.
+// REST is the external API surface; gRPC is used for service-to-service calls.
+// ---------------------------------------------------------------------------
+
+// Exposed by the Auth/Tenant service.
+// Used by: Ingestion (API key validation), Query API (project resolution).
+service Auth {
+  // Validate an ingestion/query API key and resolve the owning project.
+  rpc ValidateApiKey(ValidateApiKeyRequest) returns (ValidateApiKeyResponse);
+}
+
+// Exposed by the Query/Analytics API service.
+// Used by: Alerting service (threshold evaluation), Ingestion (opt-in checks).
+service AnalyticsQuery {
+  rpc GetOverview(OverviewRequest) returns (OverviewResponse);
+  rpc GetFunnel(FunnelRequest) returns (FunnelResponse);
+  rpc GetRetention(RetentionRequest) returns (RetentionResponse);
+  rpc GetEvents(EventQueryRequest) returns (EventQueryResponse);
+  rpc GetMetricSeries(MetricSeriesRequest) returns (MetricSeriesResponse);
+}
+
+message ValidateApiKeyRequest {
+  string api_key = 1;
+}
+
+message ValidateApiKeyResponse {
+  bool valid = 1;
+  string project_id = 2;
+  string project_name = 3;
+  string organization_id = 4;
+  string key_type = 5; // ingestion | query
+  repeated string allowed_origins = 6;
+  string error = 7;
+}
+
+message OverviewRequest {
+  string project_id = 1;
+  int64 from_ms = 2;
+  int64 to_ms = 3;
+  string granularity = 4; // hour | day | week
+}
+
+message OverviewResponse {
+  message MetricPoint {
+    int64 ts_ms = 1;
+    uint64 events = 2;
+    uint64 users = 3;
+  }
+  repeated MetricPoint series = 1;
+  uint64 total_events = 2;
+  uint64 total_users = 3;
+  uint64 active_users = 4;
+  double events_per_user = 5;
+  double users_per_visitor = 6;
+}
+
+message FunnelRequest {
+  string project_id = 1;
+  repeated string steps = 2;
+  int64 from_ms = 3;
+  int64 to_ms = 4;
+  int64 window_seconds = 5;
+  string cohort_name = 6; // optional segment by distinct_id property
+}
+
+message FunnelResponse {
+  message FunnelStep {
+    int32 index = 1;
+    string event = 2;
+    uint64 count = 3;
+    uint64 users = 4;
+    double conversion = 5; // % of cohort that reached this step
+  }
+  repeated FunnelStep steps = 1;
+  uint64 total_users = 2;
+}
+
+message RetentionRequest {
+  string project_id = 1;
+  string trigger_event = 2;
+  string returning_event = 3;
+  int64 from_ms = 4;
+  int64 to_ms = 5;
+  int64 period_days = 6; // retention bucket size in days
+  int64 periods = 7; // number of buckets to compute
+}
+
+message RetentionResponse {
+  message RetentionBucket {
+    int64 cohort_start_ms = 1;
+    uint64 cohort_users = 2;
+    repeated uint64 retained_users = 3; // indexed by period offset
+  }
+  repeated RetentionBucket cohorts = 1;
+  int64 period_days = 2;
+}
+
+message EventQueryRequest {
+  string project_id = 1;
+  string event_name = 2;
+  int64 from_ms = 3;
+  int64 to_ms = 4;
+  int32 limit = 5;
+  int32 offset = 6;
+  string distinct_id = 7;
+  string search = 8;
+}
+
+message EventQueryResponse {
+  message EventRow {
+    string event_id = 1;
+    string distinct_id = 2;
+    string event_name = 3;
+    int64 ts_ms = 4;
+    string properties = 5;
+    string session_id = 6;
+  }
+  repeated EventRow events = 1;
+  uint64 total = 2;
+}
+
+message MetricSeriesRequest {
+  string project_id = 1;
+  string event_name = 2;
+  int64 from_ms = 3;
+  int64 to_ms = 4;
+  string granularity = 5; // hour | day | week
+  string metric = 6; // events | users
+}
+
+message MetricSeriesResponse {
+  message MetricPoint {
+    int64 ts_ms = 1;
+    uint64 value = 2;
+  }
+  repeated MetricPoint series = 1;
+  uint64 total = 2;
+  uint64 total_users = 3;
+}
